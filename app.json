@@ -9,7 +9,16 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sundharatravels.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to track the bus and show your proximity to bus stops.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location in the background to track the bus continuously for drivers.",
+        "NSMicrophoneUsageDescription": "We need microphone access to send voice messages in the group chat.",
+        "NSCameraUsageDescription": "We need camera access to take photos for profile and chat.",
+        "NSPhotoLibraryUsageDescription": "We need photo library access to select images for profile and chat.",
+        "UIBackgroundModes": ["location"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,6 +27,16 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "package": "com.sundharatravels.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
@@ -37,6 +56,20 @@
           "dark": {
             "backgroundColor": "#000000"
           }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Sundhara Travels to use your location to track your bus in real-time."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#007AFF",
+          "sounds": ["./assets/sounds/notification.wav"]
         }
       ],
       "expo-font",

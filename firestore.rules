@@ -1,0 +1,275 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isDriver() {
+      return isAuthenticated() && getUserData().role == 'driver';
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+    
+    function isStudent() {
+      return isAuthenticated() && getUserData().role == 'student';
+    }
+    
+    function isStudentApproved() {
+      return isAuthenticated() && getUserData().isApproved == true;
+    }
+    
+    function isSameBus(busId) {
+      return isAuthenticated() && getUserData().bus == busId;
+    }
+    
+    function isValidEmail() {
+      return request.auth.token.email_verified == true;
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Allow read if authenticated and (same user OR same bus OR admin OR driver viewing students)
+      allow read: if isAuthenticated() && (
+        isOwner(userId) || 
+        isSameBus(resource.data.bus) ||
+        isAdmin() ||
+        (isDriver() && resource.data.role == 'student')
+      );
+      
+      // Allow create only for authenticated users creating their own profile
+      allow create: if isAuthenticated() && 
+        isOwner(userId) &&
+        request.resource.data.keys().hasAll(['email', 'fullName', 'role', 'createdAt']) &&
+        request.resource.data.email == request.auth.token.email &&
+        request.resource.data.role in ['student', 'driver', 'admin'];
+      
+      // Allow update for owner OR driver/admin updating approval status
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) &&
+         // Cannot change role after creation
+         request.resource.data.role == resource.data.role &&
+         request.resource.data.email == resource.data.email) ||
+        // Allow approval status updates by drivers and admins only
+        ((isDriver() || isAdmin()) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isApproved', 'bus', 'busStop', 'updatedAt']))
+      );
+      
+      // Admin can delete users
+      allow delete: if isAdmin();
+    }
+    
+    // Bus Locations collection
+    match /busLocations/{busId} {
+      // Allow read for authenticated users in the same bus or admin
+      allow read: if isAuthenticated() && (isSameBus(busId) || isAdmin());
+      
+      // Only drivers can write location data for their assigned bus
+      allow create, update: if isAuthenticated() && 
+        isDriver() && 
+        isSameBus(busId) &&
+        request.resource.data.keys().hasAll(['latitude', 'longitude', 'timestamp']) &&
+        request.resource.data.latitude is number &&
+        request.resource.data.longitude is number &&
+        request.resource.data.latitude >= -90 && request.resource.data.latitude <= 90 &&
+        request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180;
+      
+      // Admin can delete
+      allow delete: if isAdmin();
+    }
+    
+    // Trips collection
+    match /trips/{tripId} {
+      // Allow read for authenticated users in the same bus
+      allow read: if isAuthenticated() && (
+        isSameBus(resource.data.busId) ||
+        request.auth.uid == resource.data.driverId
+      );
+      
+      // Only drivers can create/update trips for their bus
+      allow create: if isAuthenticated() && 
+        isDriver() &&
+        isSameBus(request.resource.data.busId) &&
+        request.resource.data.driverId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['busId', 'driverId', 'startTime', 'status']);
+      
+      allow update: if isAuthenticated() && 
+        isDriver() &&
+        request.auth.uid == resource.data.driverId &&
+        isSameBus(resource.data.busId);
+      
+      // No delete allowed
+      allow delete: if false;
+    }
+    
+    // Bus Stops collection
+    match /busStops/{stopId} {
+      // Everyone can read bus stops
+      allow read: if isAuthenticated();
+      
+      // Only admins can write bus stops
+      allow write: if isAdmin();
+    }
+    
+    // Buses collection
+    match /buses/{busId} {
+      // Everyone can read buses
+      allow read: if isAuthenticated();
+      
+      // Only admins can manage buses
+      allow write: if isAdmin();
+    }
+    
+    // Routes collection
+    match /routes/{routeId} {
+      // Everyone can read routes
+      allow read: if isAuthenticated();
+      
+      // Only admins can manage routes
+      allow write: if isAdmin();
+    }
+    
+    // Approval Requests collection
+    match /approvalRequests/{requestId} {
+      // Allow read for authenticated users
+      allow read: if isAuthenticated();
+      
+      // Students can create approval requests
+      allow create: if isAuthenticated() && 
+        request.resource.data.studentId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      
+      // Allow drivers and admins to approve/reject requests
+      allow update: if isAuthenticated() && 
+        (isDriver() || isAdmin()) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedBy', 'reviewedByName', 'reviewedAt', 'rejectionReason']);
+      
+      // Allow authenticated users to delete
+      allow delete: if isAuthenticated();
+    }
+    
+    // Notifications collection
+    match /notifications/{notificationId} {
+      // Users can only read their own notifications
+      allow read: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      
+      // Users can update only the 'isRead' field of their notifications
+      allow update: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'updatedAt']);
+      
+      // Only backend can create notifications
+      allow create: if false; // Use Admin SDK
+      
+      // Users can delete their own notifications
+      allow delete: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // Chat Messages collection (optional - can also use Socket.io only)
+    match /chatMessages/{messageId} {
+      // Allow read for authenticated users in the same bus
+      allow read: if isAuthenticated() && 
+        isSameBus(resource.data.busId);
+      
+      // Allow create for authenticated users in their bus
+      allow create: if isAuthenticated() && 
+        request.resource.data.senderId == request.auth.uid &&
+        isSameBus(request.resource.data.busId) &&
+        request.resource.data.keys().hasAll(['senderId', 'busId', 'type', 'timestamp']) &&
+        request.resource.data.type in ['text', 'image', 'voice'];
+      
+      // No updates or deletes (immutable messages)
+      allow update, delete: if false;
+    }
+    
+    // Location History collection (for analytics and replay)
+    match /locationHistory/{busId}/locations/{locationId} {
+      // Allow read for users in the same bus (last 24 hours)
+      allow read: if isAuthenticated() && 
+        isSameBus(busId) &&
+        resource.data.timestamp > request.time.toMillis() - (24 * 60 * 60 * 1000);
+      
+      // Only drivers can write
+      allow create: if isAuthenticated() && 
+        isDriver() && 
+        isSameBus(busId);
+      
+      // No updates or deletes
+      allow update, delete: if false;
+    }
+    
+    // FCM Tokens collection (for push notifications)
+    match /fcmTokens/{userId} {
+      // Users can only read/write their own tokens
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Trip History collection (completed trips)
+    match /tripHistory/{tripId} {
+      // Allow read for authenticated users who were part of the trip
+      allow read: if isAuthenticated() && (
+        isSameBus(resource.data.busId) ||
+        request.auth.uid == resource.data.driverId
+      );
+      
+      // Only backend can write trip history
+      allow write: if false; // Use Admin SDK
+    }
+    
+    // Emergency SOS collection
+    match /emergencySOS/{sosId} {
+      // Allow read for drivers and the user who created it
+      allow read: if isAuthenticated() && (
+        isDriver() ||
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Allow create for authenticated users
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['userId', 'location', 'timestamp', 'status']);
+      
+      // Allow update for drivers to change status
+      allow update: if isAuthenticated() && 
+        isDriver() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolvedBy', 'resolvedAt']);
+      
+      // No delete
+      allow delete: if false;
+    }
+    
+    // Feedback collection
+    match /feedback/{feedbackId} {
+      // Users can read their own feedback
+      allow read: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      
+      // Users can create feedback
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // No updates or deletes
+      allow update, delete: if false;
+    }
+    
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

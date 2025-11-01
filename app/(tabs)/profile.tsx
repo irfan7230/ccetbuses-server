@@ -6,14 +6,18 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'expo-router';
 import { RootState, AppDispatch } from '../../store/store';
 import { logout } from '../../store/slices/authSlice';
+import { auth } from '../../config/firebase';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const user = useSelector((state: RootState) => state.auth.user);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await auth.signOut();
     dispatch(logout());
+    await ReactNativeAsyncStorage.removeItem('userData');
     router.replace('/login'); // Use replace to prevent going back to the profile
   };
 
@@ -23,15 +27,11 @@ export default function ProfileScreen() {
         <View style={styles.container}>
           {/* User Info Section */}
           <View style={styles.userInfoSection}>
-            {user?.profileImageUri ? (
-              <Avatar.Image 
-                size={80} 
-                source={{ uri: user.profileImageUri }}
-                style={styles.avatar}
-              />
-            ) : (
-              <Avatar.Icon size={80} icon="account-circle" style={styles.avatar} />
-            )}
+            <Avatar.Image 
+              size={80} 
+              source={user?.profileImageUri ? { uri: user.profileImageUri } : require('../../assets/images/avatar.png')}
+              style={styles.avatar}
+            />
             <Text variant="headlineMedium" style={styles.userName}>
               {user?.fullName || 'Sundhara User'}
             </Text>

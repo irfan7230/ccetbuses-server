@@ -3,10 +3,10 @@ export interface Message {
   type: 'text' | 'voice' | 'sticker' | 'image';
   content: string;
   imageUrl?: string;
+  voiceUrl?: string;
   time: string;
   voiceDuration?: string;
   isPlaying?: boolean;
-  // Add these properties
   sender: {
     id: string;
     name: string;

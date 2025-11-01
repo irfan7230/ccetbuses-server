@@ -3,18 +3,12 @@ import { Message } from '../../types';
 
 interface ChatState {
   messages: Message[];
+  isLoading: boolean;
 }
 
-// We'll use the same mock data as the initial state
-const initialMessages: Message[] = [
-  { id: '4', type: 'sticker', content: 'thumbs_up_sticker', time: '13:09', sender: { id: 'user_student_123', name: 'You' } },
-  { id: '3', type: 'text', content: 'ok! c u later. =D', time: '13:08', sender: { id: 'driver_01', name: 'Driver' } },
-  { id: '2', type: 'text', content: 'No, meet @ my house at 5:45. Then we can take the bus 2 the cinema.', time: '13:06', sender: { id: 'user_student_123', name: 'You' } },
-  { id: '1', type: 'voice', content: 'voice_note_1', time: '12:45', voiceDuration: '02:43', isPlaying: false, sender: { id: 'driver_01', name: 'Driver' } },
-];
-
 const initialState: ChatState = {
-  messages: initialMessages,
+  messages: [],
+  isLoading: false,
 };
 
 const chatSlice = createSlice({
@@ -22,18 +16,31 @@ const chatSlice = createSlice({
   initialState,
   reducers: {
     addMessage: (state, action: PayloadAction<Message>) => {
-      // Add the new message to the beginning of the array (for inverted list)
-      state.messages.unshift(action.payload);
+      // Check if message already exists to prevent duplicates
+      const messageExists = state.messages.some(msg => msg.id === action.payload.id);
+      if (!messageExists) {
+        // Add the new message to the beginning of the array (for inverted list)
+        state.messages.unshift(action.payload);
+      }
+    },
+    setMessages: (state, action: PayloadAction<Message[]>) => {
+      state.messages = action.payload;
     },
     toggleVoicePlaying: (state, action: PayloadAction<string>) => {
-        state.messages = state.messages.map(msg => 
-            msg.id === action.payload 
-              ? { ...msg, isPlaying: !msg.isPlaying }
-              : { ...msg, isPlaying: false }
-        );
-    }
+      state.messages = state.messages.map(msg => 
+        msg.id === action.payload 
+          ? { ...msg, isPlaying: !msg.isPlaying }
+          : { ...msg, isPlaying: false }
+      );
+    },
+    clearMessages: (state) => {
+      state.messages = [];
+    },
+    setLoading: (state, action: PayloadAction<boolean>) => {
+      state.isLoading = action.payload;
+    },
   },
 });
 
-export const { addMessage, toggleVoicePlaying } = chatSlice.actions;
+export const { addMessage, setMessages, toggleVoicePlaying, clearMessages, setLoading } = chatSlice.actions;
 export default chatSlice.reducer;

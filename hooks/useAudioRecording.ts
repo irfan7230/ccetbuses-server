@@ -97,8 +97,8 @@ export const useAudioRecording = () => {
     }
   };
 
-  const stopRecording = async (cancelled = false) => {
-    if (!recording) return;
+  const stopRecording = async (cancelled = false): Promise<string | null> => {
+    if (!recording) return null;
 
     console.log(cancelled ? 'Recording cancelled' : 'Stopping recording..');
     setIsRecording(false);
@@ -106,23 +106,7 @@ export const useAudioRecording = () => {
     stopRecordingTimer();
     
     await recording.stopAndUnloadAsync();
-    
-    if (!cancelled) {
-      const uri = recording.getURI();
-      console.log('Recording stopped and stored at', uri);
-
-      // Create a new voice message
-      const duration = Math.floor((Date.now() - recordingStartTime.current) / 1000);
-      const newMsg: Message = {
-        id: Date.now().toString(), 
-        type: 'voice', 
-        content: uri || '', 
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        sender: { id: MY_USER_ID, name: 'You' },
-        voiceDuration: formatTime(duration),
-      };
-      dispatch(addMessage(newMsg));
-    }
+    const uri = recording.getURI();
     
     setRecording(null);
     
@@ -131,6 +115,13 @@ export const useAudioRecording = () => {
       toValue: 0,
       useNativeDriver: true,
     }).start();
+    
+    if (!cancelled && uri) {
+      console.log('Recording stopped and stored at', uri);
+      return uri;
+    }
+    
+    return null;
   };
 
   // Pan responder for slide to cancel

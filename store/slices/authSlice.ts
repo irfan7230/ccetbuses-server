@@ -3,10 +3,12 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 interface User {
   fullName: string;
   email: string;
-  bus: string;
+  role: 'student' | 'driver' | 'admin';
+  bus?: string; // Optional for admin
   profileImageUri?: string;
   busStop?: string;
   isProfileComplete: boolean;
+  isApproved: boolean;
 }
 
 interface AuthState {

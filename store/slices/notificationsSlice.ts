@@ -11,25 +11,24 @@ interface Notification {
 
 interface NotificationsState {
   items: Notification[];
+  isLoading: boolean;
 }
 
-// Get today's date and subtract 3 days for the cleanup rule
-const threeDaysAgo = new Date();
-threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-
-// Initial mock data with read/unread status
 const initialState: NotificationsState = {
-  items: [
-    { id: '1', type: 'proximity', title: 'Your bus is approaching!', message: 'Bus A is approximately 2km away from your stop.', date: new Date().toISOString(), isRead: false },
-    { id: '2', type: 'broadcast', title: 'Service Update', message: 'Bus A will be running 15 minutes late today due to traffic.', date: new Date().toISOString(), isRead: false },
-    { id: '3', type: 'proximity', title: 'Your bus is approaching!', message: 'Bus A is approximately 2km away from your stop.', date: new Date(Date.now() - 86400000).toISOString(), isRead: true }, // Yesterday
-  ],
+  items: [],
+  isLoading: false,
 };
 
 const notificationsSlice = createSlice({
   name: 'notifications',
   initialState,
   reducers: {
+    addNotification: (state, action: PayloadAction<Notification>) => {
+      state.items.unshift(action.payload);
+    },
+    setNotifications: (state, action: PayloadAction<Notification[]>) => {
+      state.items = action.payload;
+    },
     markAsRead: (state, action: PayloadAction<string>) => {
       const notification = state.items.find(item => item.id === action.payload);
       if (notification) {
@@ -37,10 +36,18 @@ const notificationsSlice = createSlice({
       }
     },
     clearOldNotifications: (state) => {
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
       state.items = state.items.filter(item => new Date(item.date) > threeDaysAgo);
+    },
+    clearAllNotifications: (state) => {
+      state.items = [];
+    },
+    setLoading: (state, action: PayloadAction<boolean>) => {
+      state.isLoading = action.payload;
     },
   },
 });
 
-export const { markAsRead, clearOldNotifications } = notificationsSlice.actions;
+export const { addNotification, setNotifications, markAsRead, clearOldNotifications, clearAllNotifications, setLoading } = notificationsSlice.actions;
 export default notificationsSlice.reducer;

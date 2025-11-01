@@ -7,7 +7,8 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
-  ActivityIndicator, // Import ActivityIndicator
+  ActivityIndicator, 
+  Alert
 } from 'react-native';
 import { Text, Button } from 'react-native-paper';
 import * as Animatable from 'react-native-animatable';
@@ -17,8 +18,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
 import * as yup from 'yup';
 import { useDispatch } from 'react-redux';
+import { auth } from '../config/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { login } from '../store/slices/authSlice';
 import { AppDispatch } from '../store/store';
+// 1. Import Firestore functions
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 const loginSchema = yup.object().shape({
   email: yup.string().email('Please enter a valid email').required('Email is required'),
@@ -29,41 +35,66 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [isLoading, setIsLoading] = useState(false); // Add loading state
+  const [isLoading, setIsLoading] = useState(false);
 
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
 
   const handleLogin = async () => {
     const formData = { email, password };
-    setIsLoading(true); // Start loading
+    setIsLoading(true);
+    setErrors({});
     try {
-      setErrors({});
       await loginSchema.validate(formData, { abortEarly: false });
 
-      dispatch(login({
-        fullName: 'John Doe', // This would come from your API
-        email: formData.email,
-        bus: 'bus_a_01',
-      }));
-      console.log('User logged in!');
-
+      // --- Firebase Sign-In ---
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
       
-      // Simulate network request
-      await new Promise(resolve => setTimeout(resolve, 2000)); 
-      router.replace('/(tabs)/dashboard');
-    } catch (error) {
-      if (error instanceof yup.ValidationError) {
+      // --- Fetch User Profile from Firestore ---
+      const db = getFirestore();
+      const userDocRef = doc(db, "users", firebaseUser.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // --- Create user object with REAL data from Firestore ---
+        const userToSave = {
+          fullName: userData.fullName,
+          email: userData.email,
+          role: userData.role || 'student',
+          bus: userData.bus,
+          busStop: userData.busStop,
+          isProfileComplete: userData.isProfileComplete || false,
+          isApproved: userData.isApproved !== undefined ? userData.isApproved : true, // Default true for backward compatibility
+        };
+
+        // Save to local storage for persistence
+        await ReactNativeAsyncStorage.setItem('userData', JSON.stringify(userToSave));
+        
+        // Dispatch to Redux
+        dispatch(login(userToSave));
+      } else {
+        // This is an edge case, but good to handle
+        throw new Error("User data not found in database.");
+      }
+
+    } catch (error: any) {
+       if (error instanceof yup.ValidationError) {
         const newErrors: { [key: string]: string } = {};
         error.inner.forEach((err) => {
-          if (err.path) {
-            newErrors[err.path] = err.message;
-          }
+          if (err.path) newErrors[err.path] = err.message;
         });
         setErrors(newErrors);
+      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        Alert.alert('Login Failed', 'Invalid email or password. Please try again.');
+      } else {
+        console.error("Firebase Login Error:", error);
+        Alert.alert('Login Failed', 'An unexpected error occurred. Please try again.');
       }
     } finally {
-      setIsLoading(false); // Stop loading
+      setIsLoading(false);
     }
   };
 

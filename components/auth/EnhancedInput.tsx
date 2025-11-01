@@ -6,11 +6,13 @@ import { BlurView } from 'expo-blur';
 interface EnhancedInputProps {
   label: string;
   value: string;
-  onChangeText: (text: string) => void;
+  onChangeText?: (text: string) => void;
   secureTextEntry?: boolean;
   keyboardType?: KeyboardTypeOptions;
   icon?: string;
   error?: string; // Add error prop
+  editable?: boolean; // 1. Add editable prop
+  right?: React.ReactNode; // 2. Add right prop
 }
 
 export const EnhancedInput: React.FC<EnhancedInputProps> = ({ 
@@ -21,6 +23,8 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
   keyboardType = 'default', 
   icon,
   error, // Destructure error
+  editable = true, // 3. Destructure props with default values
+  right,
 }) => {
   const [showPassword, setShowPassword] = React.useState(!secureTextEntry);
 
@@ -42,6 +46,8 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
             contentStyle={{ fontFamily: 'Inter_400Regular', color: '#FFFFFF' }}
             theme={{ colors: { onSurfaceVariant: 'rgba(255, 255, 255, 0.5)' } }}
             error={!!error} // Show error state on the input
+            editable={editable} // 4. Pass props down to the TextInput
+            right={right}
           />
           {secureTextEntry && (
             <IconButton 

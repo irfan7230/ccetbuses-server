@@ -2,10 +2,14 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
 
-export const TypingIndicator = () => {
+interface TypingIndicatorProps {
+  typingUser?: string;
+}
+
+export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ typingUser = 'Someone' }) => {
   return (
     <View style={styles.typingContainer}>
-      <Text style={styles.typingText}>Jacob is typing</Text>
+      <Text style={styles.typingText}>{typingUser} is typing</Text>
       <View style={styles.typingDots}>
         <View style={[styles.dot, styles.dot1]} />
         <View style={[styles.dot, styles.dot2]} />

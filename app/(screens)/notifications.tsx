@@ -1,11 +1,13 @@
-import React, { useEffect } from 'react';
-import { FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { FlatList, StyleSheet, TouchableOpacity, View, ActivityIndicator, RefreshControl } from 'react-native';
 import { Appbar, List, Divider, Text, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../../store/store';
-import { markAsRead, clearOldNotifications } from '../../store/slices/notificationsSlice';
+import { markAsRead, clearOldNotifications, setNotifications, setLoading, addNotification } from '../../store/slices/notificationsSlice';
+import apiService from '../../services/api';
+import socketService from '../../services/socket';
 
 const NotificationIcon = ({ type }: { type: string }) => {
   if (type === 'proximity') {
@@ -19,14 +21,42 @@ export default function NotificationsScreen() {
   const theme = useTheme();
   const dispatch = useDispatch<AppDispatch>();
   const notifications = useSelector((state: RootState) => state.notifications.items);
+  const isLoading = useSelector((state: RootState) => state.notifications.isLoading);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Load notifications from backend
+  const loadNotifications = async () => {
+    try {
+      dispatch(setLoading(true));
+      const response: any = await apiService.getNotifications();
+      if (response && response.data) {
+        dispatch(setNotifications(response.data));
+      }
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    } finally {
+      dispatch(setLoading(false));
+    }
+  };
 
   useEffect(() => {
-    // Simulate the automatic cleanup when the screen is opened
+    loadNotifications();
     dispatch(clearOldNotifications());
   }, []);
 
-  const handleMarkAsRead = (id: string) => {
-    dispatch(markAsRead(id));
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadNotifications();
+    setRefreshing(false);
+  };
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      dispatch(markAsRead(id));
+      await apiService.markNotificationAsRead(id);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
   return (
@@ -35,23 +65,43 @@ export default function NotificationsScreen() {
         <Appbar.BackAction onPress={() => router.back()} />
         <Appbar.Content title="Notifications" titleStyle={styles.title} />
       </Appbar.Header>
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id}
-        ItemSeparatorComponent={() => <Divider style={styles.divider} />}
-        renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => handleMarkAsRead(item.id)}>
-            <List.Item
-              title={item.title}
-              description={item.message}
-              left={() => <NotificationIcon type={item.type} />}
-              titleStyle={[styles.itemTitle, !item.isRead && { color: theme.colors.primary }]}
-              descriptionStyle={styles.itemMessage}
-              style={!item.isRead && styles.unreadItem}
+      {isLoading && notifications.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Loading notifications...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.id}
+          ItemSeparatorComponent={() => <Divider style={styles.divider} />}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <List.Icon icon="bell-off-outline" color="rgba(255,255,255,0.3)" />
+              <Text style={styles.emptyText}>No notifications yet</Text>
+            </View>
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.colors.primary}
             />
-          </TouchableOpacity>
-        )}
-      />
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity onPress={() => handleMarkAsRead(item.id)}>
+              <List.Item
+                title={item.title}
+                description={item.message}
+                left={() => <NotificationIcon type={item.type} />}
+                titleStyle={[styles.itemTitle, !item.isRead && { color: theme.colors.primary }]}
+                descriptionStyle={styles.itemMessage}
+                style={!item.isRead && styles.unreadItem}
+              />
+            </TouchableOpacity>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -66,4 +116,28 @@ const styles = StyleSheet.create({
   },
   itemTitle: { fontFamily: 'Inter_700Bold', color: '#FFFFFF' },
   itemMessage: { fontFamily: 'Inter_400Regular', color: 'rgba(255, 255, 255, 0.7)' },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  loadingText: {
+    marginTop: 16,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontFamily: 'Inter_400Regular',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    marginTop: 100,
+  },
+  emptyText: {
+    marginTop: 16,
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
+  },
 });
