@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: sundhara-travels-server
+    runtime: node
+    region: oregon
+    plan: free
+    branch: master
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /api/health
